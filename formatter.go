@@ -3,14 +3,15 @@ package prefixed
 import (
 	"bytes"
 	"fmt"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/mgutz/ansi"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -36,6 +37,7 @@ var (
 		TimestampColor:  ansi.ColorFunc(""),
 	}
 	defaultCompiledColorScheme *compiledColorScheme = compileColorScheme(defaultColorScheme)
+	defaultTimestampFormat                          = "2006-01-02.15:04:05.000000"
 )
 
 func miniTS() int {
@@ -110,7 +112,10 @@ type TextFormatter struct {
 
 	// Whether the logger's out is to a terminal.
 	isTerminal bool
-
+	//enabled filename report
+	EnableReportFileName bool
+	//enabled function name report
+	EnableReportFuncName bool
 	sync.Once
 }
 
@@ -142,7 +147,7 @@ func (f *TextFormatter) init(entry *logrus.Entry) {
 		f.QuoteCharacter = "\""
 	}
 	if entry.Logger != nil {
-		f.isTerminal = logrus.IsTerminal(entry.Logger.Out)
+		//f.isTerminal = logrus.IsTerminal(entry.Logger.Out)
 	}
 }
 
@@ -152,6 +157,28 @@ func (f *TextFormatter) SetColorScheme(colorScheme *ColorScheme) {
 
 func (f *TextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	var b *bytes.Buffer
+	if entry.HasCaller() {
+		var (
+			file, function string
+			line           int
+		)
+		frame := entry.Caller
+		line = frame.Line
+		function = frame.Function
+		dir, filename := path.Split(frame.File)
+		lastDir := path.Base(dir)
+		file = fmt.Sprintf("%s/%s", lastDir, filename)
+		if f.EnableReportFileName && f.EnableReportFuncName {
+			entry.Data["prefix"] = fmt.Sprintf("[%s(%s:%d)]", function, file, line)
+		}
+		if f.EnableReportFileName && !f.EnableReportFuncName {
+			entry.Data["prefix"] = fmt.Sprintf("[%s(%d)]", file, line)
+		}
+		if !f.EnableReportFileName && f.EnableReportFuncName {
+			entry.Data["prefix"] = fmt.Sprintf("[%s(%d)]", function, line)
+		}
+
+	}
 	var keys []string = make([]string, 0, len(entry.Data))
 	for k := range entry.Data {
 		keys = append(keys, k)
@@ -174,8 +201,9 @@ func (f *TextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 	timestampFormat := f.TimestampFormat
 	if timestampFormat == "" {
-		timestampFormat = logrus.DefaultTimestampFormat
+		timestampFormat = defaultTimestampFormat
 	}
+
 	if isFormatted {
 		isColored := (f.ForceColors || f.isTerminal) && !f.DisableColors
 		var colorScheme *compiledColorScheme

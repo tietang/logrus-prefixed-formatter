@@ -14,11 +14,16 @@ func init() {
 	// Set specific colors for prefix and timestamp
 	formatter.SetColorScheme(&prefixed.ColorScheme{
 		PrefixStyle:    "blue+b",
-		TimestampStyle: "white+h",
+		TimestampStyle: "37",
 	})
-
+	formatter.EnableReportFileName = true
+	formatter.EnableReportFuncName = true
+	formatter.ForceFormatting = true
+	formatter.ForceColors = true
 	log.Formatter = formatter
 	log.Level = logrus.DebugLevel
+	log.SetReportCaller(true)
+
 }
 
 func main() {
